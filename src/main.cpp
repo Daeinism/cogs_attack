@@ -14,6 +14,47 @@
 #define CH4_PIN 32 //purple
 
 #define DEADZONE 30
+#define ALPHA 0.3 //reaction speed (Min 0.1 (10%) ~ Max 1.0 (100%))
+
+float filteredForwardBack = 0.0;
+float filteredLeftRight = 0.0;
+
+
+/*|Functions|----------------------------------------------------------------*/
+void setLeftMotor(int pwm) {
+  pwm = constrain(pwm, -255, 255);
+
+  if (pwm > 0) {
+    analogWrite(MOTOR_LEFT_LPWM_FORWARD, pwm);
+    analogWrite(MOTOR_LEFT_RPWM_BACKWARD, 0);
+  } 
+  else if (pwm < 0) {
+    analogWrite(MOTOR_LEFT_LPWM_FORWARD, 0);
+    analogWrite(MOTOR_LEFT_RPWM_BACKWARD, -pwm);
+  } 
+  else {
+    analogWrite(MOTOR_LEFT_LPWM_FORWARD, 0);
+    analogWrite(MOTOR_LEFT_RPWM_BACKWARD, 0);
+  }
+}
+
+void setRightMotor(int pwm) {
+  pwm = constrain(pwm, -255, 255);
+
+  if (pwm > 0) {
+    analogWrite(MOTOR_RIGHT_RPWM_FORWARD, pwm);
+    analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, 0);
+  } 
+  else if (pwm < 0) {
+    analogWrite(MOTOR_RIGHT_RPWM_FORWARD, 0);
+    analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, -pwm);
+  } 
+  else {
+    analogWrite(MOTOR_RIGHT_RPWM_FORWARD, 0);
+    analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, 0);
+  }
+}
+
 
 void setup() {
   Serial.begin(115200);
@@ -39,6 +80,9 @@ void setup() {
   pinMode(MOTOR_LEFT_LPWM_FORWARD, OUTPUT);
   pinMode(MOTOR_RIGHT_RPWM_FORWARD, OUTPUT);
   pinMode(MOTOR_RIGHT_LPWM_BACKWARD, OUTPUT);
+
+  analogWriteFrequency(20000); //To get rid of annoying noise
+
 }
 
 void loop() {
@@ -47,9 +91,9 @@ void loop() {
   int ch2 = pulseIn(CH2_PIN, HIGH, 25000);
   int ch4 = pulseIn(CH4_PIN, HIGH, 25000);
 
-  int leftRight = map(ch1, 900, 2000, -255, 255);
+  int leftRight   = map(ch1, 900, 2000, -255, 255);
   int forwardBack = map(ch2, 900, 2000, -255, 255);
-  int FAN = map(ch4, 900, 2000, 0, 255);
+  int FAN         = map(ch4, 900, 2000, 0, 255);
   
   Serial.print("CH1: "); Serial.print(ch1);
   Serial.print(" LR: "); Serial.print(leftRight);
@@ -59,61 +103,25 @@ void loop() {
 
   // applying Deadzone
   if (abs(leftRight) < DEADZONE) leftRight = 0;
+  if (abs(forwardBack) < DEADZONE) forwardBack = 0;
 
-  if (forwardBack > DEADZONE) {
-    analogWrite(MOTOR_LEFT_LPWM_FORWARD, abs(forwardBack));
-    analogWrite(MOTOR_LEFT_RPWM_BACKWARD, 0);
-    analogWrite(MOTOR_RIGHT_RPWM_FORWARD, abs(forwardBack));
-    analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, 0);
-  }
-  else if (forwardBack < -DEADZONE) {
-    analogWrite(MOTOR_LEFT_LPWM_FORWARD, 0);
-    analogWrite(MOTOR_LEFT_RPWM_BACKWARD, abs(forwardBack));
-    analogWrite(MOTOR_RIGHT_RPWM_FORWARD, 0);
-    analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, abs(forwardBack));
-  }
-  else {
-    analogWrite(MOTOR_LEFT_LPWM_FORWARD, 0);
-    analogWrite(MOTOR_LEFT_RPWM_BACKWARD, 0);
-    analogWrite(MOTOR_RIGHT_RPWM_FORWARD, 0);
-    analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, 0);
-  }
+  // Speed smoothing filter
+  filteredForwardBack = forwardBack * ALPHA + filteredForwardBack * (1.0 - ALPHA);
+  filteredLeftRight   = leftRight   * ALPHA + filteredLeftRight   * (1.0 - ALPHA);
 
-  delay(20);
+  int leftMotor  = (int)(filteredForwardBack + filteredLeftRight);
+  int rightMotor = (int)(filteredForwardBack - filteredLeftRight);
+
+  setLeftMotor(leftMotor);
+  setRightMotor(rightMotor);
+
+  delay(20); //loop is set to 50 Hz 
+  /*
+  50ms = 20Hz   Slow
+  20ms = 50Hz   Standard rangefor RC/servo system 
+  10ms = 100Hz  Fast and smooth
+  5ms  = 200Hz  Too much
+  */
 
 }
-
-
-// void loop() {
-
-//     for (int i = 0; i < MAX_SPEED; i += 10){
-//     analogWrite(MOTOR_LEFT_LPWM_FORWARD, i);
-//     analogWrite(MOTOR_RIGHT_RPWM_FORWARD, i);
-//     analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, 0);
-//     analogWrite(MOTOR_LEFT_RPWM_BACKWARD, 0);
-//     delay(250); 
-//   }
-//   for (int i = MAX_SPEED; i > 0; i -= 10){
-//     analogWrite(MOTOR_LEFT_LPWM_FORWARD, i);
-//     analogWrite(MOTOR_RIGHT_RPWM_FORWARD, i);
-//     analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, 0);
-//     analogWrite(MOTOR_LEFT_RPWM_BACKWARD, 0);
-//     delay(250); 
-//   }
-//   for (int i = 0; i < MAX_SPEED; i += 10){
-//     analogWrite(MOTOR_LEFT_LPWM_FORWARD, 0);
-//     analogWrite(MOTOR_RIGHT_RPWM_FORWARD, 0);
-//     analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, i);
-//     analogWrite(MOTOR_LEFT_RPWM_BACKWARD, i);
-//     delay(250); 
-//   }
-//   for (int i = MAX_SPEED; i > 0; i -= 10){
-//     analogWrite(MOTOR_LEFT_LPWM_FORWARD, 0);
-//     analogWrite(MOTOR_RIGHT_RPWM_FORWARD, 0);
-//     analogWrite(MOTOR_RIGHT_LPWM_BACKWARD, i);
-//     analogWrite(MOTOR_LEFT_RPWM_BACKWARD, i);
-//     delay(250); 
-//   }
-  
-// }
 
