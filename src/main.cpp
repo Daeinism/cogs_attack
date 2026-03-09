@@ -15,6 +15,7 @@
 
 #define DEADZONE 30
 #define ALPHA 0.3 //reaction speed (Min 0.1 (10%) ~ Max 1.0 (100%))
+#define STEERING_GAIN 0.6 //dampening the cornering speed (Min 0.1 (10%) ~ Max 1.0 (100%))
 
 float filteredForwardBack = 0.0;
 float filteredLeftRight = 0.0;
@@ -55,6 +56,13 @@ void setRightMotor(int pwm) {
   }
 }
 
+void serialPrint (int ch1, int ch2, int ch4, int leftRight, int forwardBack){
+  Serial.print("CH1: "); Serial.print(ch1);
+  Serial.print(" LR: "); Serial.print(leftRight);
+  Serial.print("   CH2: "); Serial.print(ch2);
+  Serial.print(" FB: "); Serial.print(forwardBack);
+  Serial.print("   CH4: "); Serial.println(ch4);
+}
 
 void setup() {
   Serial.begin(115200);
@@ -95,22 +103,27 @@ void loop() {
   int forwardBack = map(ch2, 900, 2000, -255, 255);
   int FAN         = map(ch4, 900, 2000, 0, 255);
   
-  Serial.print("CH1: "); Serial.print(ch1);
-  Serial.print(" LR: "); Serial.print(leftRight);
-  Serial.print("\tCH2: "); Serial.print(ch2);
-  Serial.print(" FB: "); Serial.print(forwardBack);
-  Serial.print("\tCH4: "); Serial.println(ch4);
+  serialPrint (ch1, ch2, ch4, leftRight, forwardBack);
+
+  // failSafe system
+  if (ch1 == 0 || ch2 == 0) {
+    setLeftMotor(0);
+    setRightMotor(0);
+    return;
+  }
 
   // applying Deadzone
   if (abs(leftRight) < DEADZONE) leftRight = 0;
   if (abs(forwardBack) < DEADZONE) forwardBack = 0;
 
+
+
   // Speed smoothing filter
   filteredForwardBack = forwardBack * ALPHA + filteredForwardBack * (1.0 - ALPHA);
   filteredLeftRight   = leftRight   * ALPHA + filteredLeftRight   * (1.0 - ALPHA);
 
-  int leftMotor  = (int)(filteredForwardBack + filteredLeftRight);
-  int rightMotor = (int)(filteredForwardBack - filteredLeftRight);
+  int leftMotor  = (int)(filteredForwardBack + filteredLeftRight * STEERING_GAIN);
+  int rightMotor = (int)(filteredForwardBack - filteredLeftRight * STEERING_GAIN);
 
   setLeftMotor(leftMotor);
   setRightMotor(rightMotor);
@@ -124,4 +137,3 @@ void loop() {
   */
 
 }
-
